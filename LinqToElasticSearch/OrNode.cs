@@ -48,7 +48,7 @@ namespace LinqToElasticSearch
 
                     _optimizedNodes.Add(or.Right);
                 }
-                else if (!(or.Left is OrNode) && or.Right is OrNode r)
+                else if (!(or.Left is OrNode) && !or.Right.IsSubQuery && or.Right is OrNode r)
                 {
                     _optimizedNodes.Add(or.Left);
 
@@ -70,7 +70,7 @@ namespace LinqToElasticSearch
                         DoOptimize(r.Right);
                     }
                 }
-                else if (or.Left is OrNode left && or.Right is OrNode right)
+                else if (or.Left is OrNode left && !or.Right.IsSubQuery && or.Right is OrNode right)
                 {
                     if (!(left.Left is OrNode))
                     {

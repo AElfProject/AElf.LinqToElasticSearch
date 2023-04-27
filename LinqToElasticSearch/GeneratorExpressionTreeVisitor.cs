@@ -158,7 +158,8 @@ namespace LinqToElasticSearch
             foreach (var resultOperator in expression.QueryModel.ResultOperators)
             {
                 Node query = null;
-
+                var fullPath = expression.QueryModel.MainFromClause.ItemType.FullName;
+                var from = expression.QueryModel.MainFromClause.ItemType.FullName?.Split('.').Last();
                 switch (resultOperator)
                 {
                     case ContainsResultOperator containsResultOperator:
@@ -191,6 +192,10 @@ namespace LinqToElasticSearch
                         {
                             Visit(whereClause.Predicate);
                             QueryMap[expression] = QueryMap[whereClause.Predicate];
+                            QueryMap[expression].IsSubQuery = true;
+                            QueryMap[expression].SubQueryPath = from.ToLower();
+                            QueryMap[expression].SubQueryFullPath = fullPath;
+                            VisitBinarySetSubQuery((BinaryExpression)whereClause.Predicate, from.ToLower(), fullPath);
                         }
 
                         break;
@@ -542,6 +547,38 @@ namespace LinqToElasticSearch
             }
 
             return (int)enumValue;
+        }
+        protected void VisitBinarySetSubQuery(BinaryExpression expression, string path, string fullPath)
+        {
+
+            if (expression.Left is BinaryExpression && expression.Right is ConstantExpression)
+            {
+                return;
+            }
+
+            if (expression.Right is BinaryExpression && expression.Left is ConstantExpression)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(fullPath))
+            {
+                return;
+            }
+
+            if (expression.Left.NodeType is ExpressionType.MemberAccess || expression.Right is ConstantExpression)
+            {
+                QueryMap[expression].IsSubQuery = true;
+                QueryMap[expression].SubQueryPath = path;
+                QueryMap[expression].SubQueryFullPath = fullPath;
+                return;
+            }
+
+            VisitBinarySetSubQuery((BinaryExpression)expression.Left, path, fullPath);
+            VisitBinarySetSubQuery((BinaryExpression)expression.Right, path, fullPath);
+            QueryMap[expression].IsSubQuery = true;
+            QueryMap[expression].SubQueryPath = path;
+            QueryMap[expression].SubQueryFullPath = fullPath;
         }
     }
 }

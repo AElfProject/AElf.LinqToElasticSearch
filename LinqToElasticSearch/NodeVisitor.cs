@@ -1,4 +1,6 @@
 ﻿using System.Linq;
+using System;
+using System.Reflection;
 using Nest;
 
 namespace LinqToElasticSearch
@@ -8,18 +10,44 @@ namespace LinqToElasticSearch
         public QueryContainer Visit(BoolNode node)
         {
             var queries = node.Children.Select(x => x.Accept(this));
+            var path = node.SubQueryPath;;
+            if(node.IsSubQuery && !string.IsNullOrEmpty(path))
+            {
+                return new NestedQuery
+                {
+                    Path = path,
+                    Query = new BoolQuery { Should = queries }
+                };
+            }
             return new BoolQuery { Should = queries };
         }
 
         public QueryContainer Visit(OrNode node)
         {
+            if (node.IsSubQuery)
+            {
+                BoolNode boolNode = new BoolNode(node.Optimize());
+                boolNode.IsSubQuery = node.IsSubQuery;
+                boolNode.SubQueryPath = node.SubQueryPath;
+                boolNode.SubQueryFullPath = node.SubQueryFullPath;
+                return boolNode.Accept(this);
+            }
             return new BoolNode(node.Optimize()).Accept(this);
         }
 
         public QueryContainer Visit(AndNode node)
         {
+            var path = node.SubQueryPath;
             var left = node.Left.Accept(this);
             var right = node.Right.Accept(this);
+            if(node.IsSubQuery  && !string.IsNullOrEmpty(path))
+            {
+                return new NestedQuery
+                {
+                    Path = path,
+                    Query = new BoolQuery { Must = new[] { left, right } }
+                };
+            }
             return new BoolQuery { Must = new[] { left, right } };
         }
 
@@ -35,6 +63,11 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(TermNode node)
         {
+            var field = getFieldName(node, node.Field);
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new TermQuery
             {
                 Field = node.Field,
@@ -45,6 +78,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(TermsNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new TermsQuery
             {
                 Field = node.Field,
@@ -56,6 +95,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(TermsSetNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new TermsSetQuery
             {
                 Field = node.Field,
@@ -98,6 +143,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(DateRangeNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new DateRangeQuery
             {
                 Field = node.Field,
@@ -111,6 +162,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(MatchPhraseNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new MatchPhraseQuery
             {
                 Field = node.Field,
@@ -121,6 +178,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(NumericRangeNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new NumericRangeQuery
             {
                 Field = node.Field,
@@ -144,6 +207,12 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(MultiMatchNode node)
         {
+            var field = getFieldName(node, node.Field);
+
+            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            {
+                node.Field = field;
+            }
             return new MultiMatchQuery
             {
                 Fields = new[] { node.Field },
@@ -152,6 +221,34 @@ namespace LinqToElasticSearch
                 Query = (string)node.Value,
                 MaxExpansions = 200
             };
+        }
+        
+        private bool checkAttribute(string fullClass, string field)
+        {
+            Type type = Type.GetType(fullClass);
+            PropertyInfo propertyInfo = type.GetProperty(char.ToUpper(field[0]) + field.Substring(1));
+            NestedAttributes attribute = propertyInfo.GetCustomAttribute<NestedAttributes>();
+            if (attribute != null)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private string getFieldName(Node node, string field)
+        {
+            var rtnField = field;
+            //反射获取注解的字段
+            if (node.IsSubQuery && checkAttribute(node.SubQueryFullPath, field))
+            {
+                rtnField = node.SubQueryPath + "." + field;
+            }
+            else
+            {
+                rtnField = null;
+            }
+
+            return rtnField;
         }
     }
 }

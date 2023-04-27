@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Dynamic;
 using System.Linq;
 using System.Linq.Expressions;
+using Elasticsearch.Net;
 using Nest;
 using Newtonsoft.Json;
 using Remotion.Linq;
@@ -129,7 +130,8 @@ namespace LinqToElasticSearch
                     });
 
                 }
-                
+                var dsl = _elasticClient.RequestResponseSerializer.SerializeToString(descriptor);
+                Console.WriteLine(dsl);
                 return descriptor;
 
             });
