@@ -9,7 +9,7 @@ namespace LinqToElasticSearch
 
         public string Book_name { get; set; }
 
-        public DateTime PublishDate { get; set; }
+        public DateTime Publish_date { get; set; }
 
         public string Publisher { get; set; }
 
