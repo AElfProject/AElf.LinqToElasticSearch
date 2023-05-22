@@ -203,14 +203,10 @@ namespace LinqToElasticSearch
                         {
                             descriptor.Query(q => queryAggregator.Query);
                         }
+                        var dsl = _elasticClient.RequestResponseSerializer.SerializeToString(descriptor);
+                        Console.WriteLine(dsl);
                         return descriptor;
                     }).Count;
-
-                    if (result > ElasticQueryLimit)
-                    {
-                        result = ElasticQueryLimit;
-                    }
-                    
                     var converter = TypeDescriptor.GetConverter(typeof(T));
                     if (converter.CanConvertFrom(typeof(string)))
                     {

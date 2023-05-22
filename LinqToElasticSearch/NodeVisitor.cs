@@ -10,7 +10,7 @@ namespace LinqToElasticSearch
         public QueryContainer Visit(BoolNode node)
         {
             var queries = node.Children.Select(x => x.Accept(this));
-            var path = node.SubQueryPath;;
+            var path = GetAttributePathName(node);;
             if(node.IsSubQuery && !string.IsNullOrEmpty(path))
             {
                 return new NestedQuery
@@ -37,7 +37,7 @@ namespace LinqToElasticSearch
 
         public QueryContainer Visit(AndNode node)
         {
-            var path = node.SubQueryPath;
+            var path = GetAttributePathName(node);
             var left = node.Left.Accept(this);
             var right = node.Right.Accept(this);
             if(node.IsSubQuery  && !string.IsNullOrEmpty(path))
@@ -64,7 +64,7 @@ namespace LinqToElasticSearch
         public QueryContainer Visit(TermNode node)
         {
             var field = getFieldName(node, node.Field);
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -80,7 +80,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -97,7 +97,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -145,7 +145,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -164,7 +164,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -180,7 +180,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -209,7 +209,7 @@ namespace LinqToElasticSearch
         {
             var field = getFieldName(node, node.Field);
 
-            if (!string.IsNullOrEmpty(field) && node.IsSubQuery)
+            if (!string.IsNullOrEmpty(field))
             {
                 node.Field = field;
             }
@@ -223,7 +223,7 @@ namespace LinqToElasticSearch
             };
         }
         
-        private bool checkAttribute(string fullClass, string field)
+        private bool CheckAttribute(string fullClass, string field)
         {
             Type type = Type.GetType(fullClass);
             PropertyInfo propertyInfo = type.GetProperty(char.ToUpper(field[0]) + field.Substring(1));
@@ -238,17 +238,50 @@ namespace LinqToElasticSearch
         private string getFieldName(Node node, string field)
         {
             var rtnField = field;
-            //反射获取注解的字段
-            if (node.IsSubQuery && checkAttribute(node.SubQueryFullPath, field))
+            if((!node.IsSubQuery && !node.ParentIsSubQuery) || node.SubQueryFullPath.IsNullOrEmpty())
+            {
+                return rtnField;
+            }
+            var path = GetAttributePathName(node.SubQueryFullPath);
+            if (!path.IsNullOrEmpty())
+            {
+                rtnField = path + "." + field;
+            }else
             {
                 rtnField = node.SubQueryPath + "." + field;
             }
-            else
-            {
-                rtnField = null;
-            }
 
             return rtnField;
+        }
+         
+        private string GetAttributePathName(string fullClass)
+        {
+            Type type = Type.GetType(fullClass);
+            NestedAttributes attribute = type.GetCustomAttribute<NestedAttributes>();
+            if (attribute != null)
+            {
+                return attribute.Name;
+            }
+            return "";
+        }
+        
+        public static string GetAttributePathName(Node node)
+        {
+            if(!node.IsSubQuery || node.SubQueryFullPath.IsNullOrEmpty())
+            {
+                return "";
+            }
+            Type type = Type.GetType(node.SubQueryFullPath);
+            NestedAttributes attribute = type.GetCustomAttribute<NestedAttributes>();
+            var path = "";
+            if (attribute != null)
+            {
+                if (!attribute.Name.IsNullOrEmpty())
+                {
+                    return attribute.Name;
+                }
+            }
+            return node.SubQueryPath;
         }
     }
 }
