@@ -158,7 +158,8 @@ namespace LinqToElasticSearch
             foreach (var resultOperator in expression.QueryModel.ResultOperators)
             {
                 Node query = null;
-
+                var fullPath = expression.QueryModel.MainFromClause.ItemType.FullName;
+                var from = expression.QueryModel.MainFromClause.ItemType.FullName?.Split('.').Last();
                 switch (resultOperator)
                 {
                     case ContainsResultOperator containsResultOperator:
@@ -190,7 +191,14 @@ namespace LinqToElasticSearch
                         foreach (var whereClause in whereClauses)
                         {
                             Visit(whereClause.Predicate);
-                            QueryMap[expression] = QueryMap[whereClause.Predicate];
+                            Node tmp = (Node)QueryMap[whereClause.Predicate].Clone();
+                            QueryMap[expression] = tmp ;
+                            QueryMap[expression].IsSubQuery = true;
+                            QueryMap[expression].SubQueryPath = from;
+                            QueryMap[expression].SubQueryFullPath = fullPath;
+                            BinaryExpression predicate = (BinaryExpression)whereClause.Predicate;
+                            VisitBinarySetSubQuery((BinaryExpression)predicate.Left, from, fullPath, true);
+                            VisitBinarySetSubQuery((BinaryExpression)predicate.Right, from, fullPath, true);
                         }
 
                         break;
@@ -368,9 +376,9 @@ namespace LinqToElasticSearch
             switch (expression.NodeType)
             {
                 case ExpressionType.Equal:
-                    return new MatchPhraseNode(PropertyName, Value);
+                    return new TermNode(PropertyName, Value);
                 case ExpressionType.NotEqual:
-                    return new NotNode(new MatchPhraseNode(PropertyName, Value));
+                    return new NotNode(new TermNode(PropertyName, Value));
                 default:
                     return null;
             }
@@ -542,6 +550,40 @@ namespace LinqToElasticSearch
             }
 
             return (int)enumValue;
+        }
+        protected void VisitBinarySetSubQuery(BinaryExpression expression, string path, string fullPath, bool parentIsSubQuery)
+        {
+
+            if (expression.Left is BinaryExpression && expression.Right is ConstantExpression)
+            {
+                return;
+            }
+
+            if (expression.Right is BinaryExpression && expression.Left is ConstantExpression)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(fullPath))
+            {
+                return;
+            }
+
+            if (expression.Left.NodeType is ExpressionType.MemberAccess || expression.Right is ConstantExpression)
+            {
+                QueryMap[expression].IsSubQuery = false;
+                QueryMap[expression].ParentIsSubQuery = parentIsSubQuery;
+                QueryMap[expression].SubQueryPath = path;
+                QueryMap[expression].SubQueryFullPath = fullPath;
+                return;
+            }
+
+            VisitBinarySetSubQuery((BinaryExpression)expression.Left, path, fullPath, parentIsSubQuery);
+            VisitBinarySetSubQuery((BinaryExpression)expression.Right, path, fullPath, parentIsSubQuery);
+            QueryMap[expression].IsSubQuery = false;
+            QueryMap[expression].ParentIsSubQuery = parentIsSubQuery;
+            QueryMap[expression].SubQueryPath = path;
+            QueryMap[expression].SubQueryFullPath = fullPath;
         }
     }
 }
